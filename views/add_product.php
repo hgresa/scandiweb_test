@@ -39,17 +39,17 @@
         <!-- ------------------------------------------------------------------------------------------------------>
         <div style="display: flex">
             <div class="mb-3 col-md-1">
-                <label for="type_switcher" class="form-label">Type Switcher</label>
+                <label for="type" class="form-label">Type Switcher</label>
             </div>
             <div class="mb-3 col-md-3">
-                <select name="type_switcher" class="form-select" id="type_switcher" onchange="switch_type();validateForm('type_switcher')">
+                <select name="type" class="form-select" id="type" onchange="switch_type();validateForm('type')">
                     <option value=""></option>
                     <option value="dvd">DVD-disc</option>
                     <option value="furniture">Furniture</option>
                     <option value="book">Book</option>
                 </select>
-                <?php if (isset($errors["type_switcher"])) : ?>
-                    <span id="type_switcher-err" style="color: red"><?= $errors["type_switcher"] ?></span>
+                <?php if (isset($errors["type"])) : ?>
+                    <span id="type-err" style="color: red"><?= $errors["type"] ?></span>
                 <?php endif; ?>
             </div>
         </div>
@@ -62,7 +62,7 @@
 <script>
     function switch_type()
     {
-        let type = $("#type_switcher").val()
+        let type = $("#type").val()
         let type_form = $("#type_form")
             type_form.empty()
 

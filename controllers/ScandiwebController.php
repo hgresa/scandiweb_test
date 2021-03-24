@@ -6,25 +6,18 @@ use app\core\Controller;
 
 abstract class Product extends Controller
 {
-    protected string $SKU;
+    protected string $sku;
     protected string $name;
     protected string $price;
     protected string $type;
 
-    /**
-     * Product constructor assigns values to protected properties.
-     * @param $SKU
-     * @param $name
-     * @param $price
-     * @param $type
-     */
-    public function __construct($SKU, $name, $price, $type)
+    public function __construct($fields)
     {
         parent::__construct();
-        $this->SKU = $SKU;
-        $this->name = $name;
-        $this->price = $price;
-        $this->type = $type;
+        foreach ($fields as $key => $value)
+        {
+            $this->$key = $value;
+        }
     }
 
     /**
@@ -33,50 +26,56 @@ abstract class Product extends Controller
     protected function insert_into_product()
     {
         $sql = $this->db->prepare("INSERT INTO product(sku, name, price, type) VALUES (?, ?, ?, ?)");
-        $sql->execute([$this->SKU, $this->name, $this->price, $this->type]);
+        $sql->execute([$this->sku, $this->name, $this->price, $this->type]);
     }
 
     /**
      *
      * This method is used to insert product-specific data into the database
      *
-     * @param $data
      * @return mixed
      */
-    abstract function insert_into_db($data);
+    abstract function insert_into_db();
 }
 
 class Dvd extends Product
 {
-    function insert_into_db($data)
+    protected int $size_mb;
+
+    function insert_into_db()
     {
-        $data["sku_id"] = $this->SKU;
         $this->insert_into_product();
 
-        $this->db->prepare("INSERT INTO dvd(size_mb, sku) VALUES (?, ?)")->execute(array_values($data));
+        $sql = $this->db->prepare("INSERT INTO dvd(size_mb, sku) VALUES (?, ?)");
+        $sql->execute([$this->size_mb, $this->sku]);
     }
 }
 
 class Book extends Product
 {
-    function insert_into_db($data)
+    protected int $weight_kg;
+
+    function insert_into_db()
     {
-        $data["sku_id"] = $this->SKU;
         $this->insert_into_product();
 
-        $this->db->prepare("INSERT INTO book(weight_kg, sku) VALUES (?, ?)")->execute(array_values($data));
+        $sql = $this->db->prepare("INSERT INTO book(weight_kg, sku) VALUES (?, ?)");
+        $sql->execute([$this->weight_kg, $this->sku]);
     }
 }
 
 class Furniture extends Product
 {
-    function insert_into_db($data)
+    protected int $height_cm;
+    protected int $width_cm;
+    protected int $length_cm;
+
+    function insert_into_db()
     {
-        $data["sku_id"] = $this->SKU;
         $this->insert_into_product();
 
         $sql = $this->db->prepare("INSERT INTO furniture(height_cm, width_cm, length_cm, sku) VALUES (?, ?, ?, ?)");
-        $sql->execute(array_values($data));
+        $sql->execute([$this->height_cm, $this->width_cm, $this->length_cm, $this->sku]);
     }
 }
 
@@ -123,18 +122,17 @@ class ScandiwebController extends Controller
 
         $rules =
         [
-            "sku" => function ($data) {if (strlen($data) == 0) return "Please, submit required data";
-                                        elseif ($this->rowExists("product", "sku", $data)) return "SKU must be unique"; return true;},
-            "name" => function ($data) {if (strlen($data) == 0) return "Please, submit required data"; return true;},
-            "price" => function ($data) {if (strlen($data) == 0) return "Please, submit required data";
-                                            elseif (!is_numeric($data)) return "Please, provide the data of indicated type"; return true;},
-            "type_switcher" => function ($data) {if (strlen($data) == 0) return "Please, submit required data"; return true;},
-            "size_mb" => function ($data) {if (strlen($data) == 0) return "Please, submit required data"; elseif (!is_numeric($data)) return "Please, provide the data of indicated type"; return true;},
-            "weight_kg" => function ($data) {if (strlen($data) == 0) return "Please, submit required data"; elseif (!is_numeric($data)) return "Please, provide the data of indicated type"; return true;},
-            "height_cm" => function ($data) {if (strlen($data) == 0) return "Please, submit required data"; elseif (!is_numeric($data)) return "Please, provide the data of indicated type"; return true;},
-            "width_cm" => function ($data) {if (strlen($data) == 0) return "Please, submit required data"; elseif (!is_numeric($data)) return "Please, provide the data of indicated type"; return true;},
-            "length_cm" => function ($data) {if (strlen($data) == 0) return "Please, submit required data"; elseif (!is_numeric($data)) return "Please, provide the data of indicated type"; return true;},
+            "sku" => function ($data) {if (strlen($data) == 0) return "Please, submit required data"; elseif ($this->rowExists("product", "sku", $data)) return "SKU must be unique"; return true;},
         ];
+
+        foreach (["price", "size_mb", "weight_kg", "height_cm", "width_cm", "length_cm"] as $field_name)
+        {
+            $rules[$field_name] = function ($data) {if (strlen($data) == 0) return "Please, submit required data"; elseif (!is_numeric($data)) return "Please, provide the data of indicated type"; return true;};
+        }
+        foreach (["name", "type"] as $field_name)
+        {
+            $rules[$field_name] = function ($data) {if (strlen($data) == 0) return "Please, submit required data"; return true;};
+        }
 
         foreach($data as $key => $value)
         {
@@ -193,12 +191,12 @@ class ScandiwebController extends Controller
             }
             else
             {
-                $product_type = ucfirst($post_data["type_switcher"]);
+                $product_type = ucfirst($post_data["type"]);
                 $product_specific_data = array_slice($post_data, 4);
 
                 // Create the instance of the class according to the type
                 $class = "\app\controllers\\$product_type";
-                $object = new $class($post_data["sku"], $post_data["name"], $post_data["price"], $post_data["type_switcher"]);
+                $object = new $class($post_data);
                 $object->insert_into_db($product_specific_data);
                 unset($object);
 
@@ -213,19 +211,10 @@ class ScandiwebController extends Controller
     {
         if ($this->requestMethod() == "post")
         {
-            foreach ($_POST as $value)
-            {
-                foreach ($value as $sku)
-                {
-                    // determine what type is the product which is same as the table name
-                    $product_type = $this->db->prepare("SELECT type FROM product WHERE sku = ?");
-                    $product_type->execute([$sku]);
-                    $table_name = $product_type->fetch($this->db::FETCH_ASSOC)["type"];
+            $placeholders = substr(str_repeat("?, ", count($_POST["products_to_delete"])), 0, -2);
 
-                    $this->db->prepare("DELETE FROM $table_name WHERE sku = ?")->execute([$sku]);
-                    $this->db->prepare("DELETE FROM product WHERE sku = ?")->execute([$sku]);
-                }
-            }
+            $sql = $this->db->prepare("DELETE FROM product WHERE sku IN ($placeholders)");
+            $sql->execute($_POST["products_to_delete"]);
         }
     }
 }
